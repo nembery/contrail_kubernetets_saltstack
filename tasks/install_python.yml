@@ -1,0 +1,10 @@
+---
+
+- name: Update apt
+  raw: apt-get update
+
+- name: Install Python on Ubuntu 
+  raw: apt-get install python -y
+
+- name: Install pip
+  raw: apt-get install python-pip -y

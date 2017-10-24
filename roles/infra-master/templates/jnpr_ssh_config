@@ -1,0 +1,5 @@
+Host *
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  HostkeyAlgorithms +ssh-dss
+  PubkeyAcceptedKeyTypes +ssh-dss

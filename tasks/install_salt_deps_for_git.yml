@@ -1,0 +1,41 @@
+---
+
+- name: Install non-broken python openssl
+  pip:
+    name: pyOpenSSL
+    version: 16.2.0
+
+- name: Install Salt Dependancies
+  apt:
+    name: "{{ item }}"
+    update_cache: true
+    state: present
+
+  with_items:
+      - python-dev
+      - libzmq1
+      - libzmq-dev
+      - git
+      - python-pip
+      - python-msgpack
+      - python-yaml
+      - python-jinja2
+      - python-markupsafe
+      - python-libcloud
+      - python-requests
+      - python-tornado
+      - python-concurrent.futures
+      - python-zmq
+      - python-pycryptopp
+      - python-m2crypto
+      - python-twisted
+
+- name: Download Salt bootstrap
+  get_url:
+    url: "https://bootstrap.saltstack.com"
+    dest: "/var/tmp/bootstrap_salt.sh"
+
+- name: Chmod Salt Bootstrap
+  file:
+    path: "/var/tmp/bootstrap_salt.sh"
+    mode: "a+x"

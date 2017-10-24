@@ -1,0 +1,114 @@
+---
+
+- name: Install apt-transport-https
+  apt:
+    name: apt-transport-https
+    state: latest
+    update_cache: true
+
+- name: Add Google key to apt
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes repo
+  apt_repository:
+    repo: 'deb http://apt.kubernetes.io/ kubernetes-xenial main'
+    filename: kubernetes
+    state: present
+
+- name: Install packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  with_items:
+    - docker.io
+    - kubelet
+    - kubeadm
+    - kubectl
+    - kubernetes-cni
+
+# taken from here: https://github.com/dcj/ansible-kubeadm-cluster/blob/develop/roles/admission_token/tasks/generate.yml
+
+- name: Generate admission_token
+  command: python -c 'import random; print "%0x.%0x" % (random.SystemRandom().getrandbits(3*8), random.SystemRandom().getrandbits(8*8))'
+  register: token_raw
+
+- set_fact:
+    admission_token: '{{ token_raw.stdout }}'
+
+- file:
+    path: /etc/infra/
+    state: directory
+
+- name: Save token as tokens/cluster_name.yml
+  copy:
+    dest: /etc/infra/kubernetes_join_token.yml
+    content: "admission_token: {{ admission_token }}"
+
+- name: Initialize master
+  command: kubeadm init --token {{ admission_token }}
+  args:
+    creates: /etc/kubernetes/pki 
+
+- name: create .kube directory
+  file:
+    path: /home/juniper/.kube
+    state: directory
+    owner: juniper
+    group: juniper
+  tags:
+    - contrail
+
+- name: copy admin.conf
+  shell: cp /etc/kubernetes/admin.conf /home/juniper/.kube/config
+  become: True
+  tags:
+    - contrail
+
+- name: perms on admin.conf
+  file:
+    path: /home/juniper/.kube/config
+    owner: juniper
+    group: juniper
+    mode: 0700
+  tags:
+    - contrail
+
+- name: clone contrail-docker repo
+  git:
+    repo: https://github.com/Juniper/contrail-docker.git
+    version: R4.0
+    dest: /opt/contrail-docker
+  tags:
+    - contrail
+  
+- name: copy manifest
+  template:
+    src: templates/infra-manifest.j2
+    dest: /opt/contrail-docker/kubernetes/manifests/juniper-infra.yaml
+  tags:
+    - contrail
+
+# FIXME - make this idempotent
+- name: patch_kube_dns_liveliness_probe
+  command: 'kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/0/readinessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:8081/readiness"]}}}]" -n kube-system'
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+ 
+# FIXME - make this idempotent
+- name: patch kube_dns_readiness_probe
+  command: 'kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/0/livenessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:10054/healthcheck/kubedns"]}}}]" -n kube-system && kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/1/livenessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:10054/healthcheck/dnsmasq"]}}}]" -n kube-system && kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/2/livenessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:10054/metrics"]}}}]" -n kube-system'
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+     
+# FIXME - make this idempotent
+- name: deploy opencontrail
+  command: kubectl apply -f /opt/contrail-docker/kubernetes/manifests/juniper-infra.yaml
+  tags:
+    - contrail
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+
+  

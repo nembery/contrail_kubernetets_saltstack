@@ -1,0 +1,10 @@
+git_repo: https://github.com/saltstack/salt.git
+git_branch: 2017.7.2
+
+ansible_ssh_private_key_file: /home/juniper/.ssh/id_rsa
+ansible_become_pass: juniper123
+
+ntp:
+  - ntp.juniper.net
+  - ntp2.juniper.net
+  - ntp3.juniper.net

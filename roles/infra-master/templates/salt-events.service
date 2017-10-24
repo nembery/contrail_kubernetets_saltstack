@@ -1,0 +1,11 @@
+[Unit]
+Description=Salt Events
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/bin/sh -c '/usr/bin/salt-run state.event pretty=True >> /var/log/salt/events.log 2>&1'
+
+[Install]
+WantedBy=multi-user.target
+

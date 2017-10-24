@@ -1,0 +1,226 @@
+---
+
+- name: Install infra dependancies
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: true
+  with_items:
+    - python-git
+    - jq
+    - curl
+    - ntp
+    - ntpdate
+  tags: reqs
+
+- name: install rest api
+  pip:
+    name: CherryPy
+    state: latest
+
+- name: install pip reqs
+  pip:
+    name: "{{ item }}"
+    state: latest
+  with_items:
+    - twisted
+    - pyparsing
+  tags: reqs
+
+- name: install Ansible
+  pip:
+    name: ansible
+    state: latest
+
+- name: Build simple hosts file
+  lineinfile:
+    dest: /etc/hosts
+    line: '127.0.1.1 {{ ansible_nodename }}'
+    regexp: '^127.0.1.1'
+    insertafter: '127.0.0.1 localhost'
+  tags: hf
+
+- name: Execute bootstrap_salt
+  command: /var/tmp/bootstrap_salt.sh -P -M -g {{ git_repo }} git {{ git_branch }}
+  args:
+    creates: /usr/bin/salt-master
+
+- name: Copy salt-master configuration file
+  template: 
+    src: templates/salt_master.cfg.j2
+    dest: /etc/salt/master
+
+- name: Copy salt-minion configuration file
+  template:
+    src: templates/salt_minion.cfg.j2
+    dest: /etc/salt/minion
+
+- name: Copy salt-proxy configuration file
+  template:
+    src: templates/salt_proxy.cfg.j2
+    dest: /etc/salt/proxy
+
+- name: Create pillar directory
+  file:
+    path: /srv/pillar
+    state: directory
+
+- name: Create runner directory
+  file:
+    path: /srv/runners
+    state: directory
+
+- name: Create reactor directory
+  file:
+    path: /srv/reactor
+    state: directory
+  tags: dirs
+
+- name: Create master.d directory
+  file:
+    path: /etc/salt/master.d/
+    state: directory
+  tags: dirs
+
+- name: Create salt directory
+  file:
+    path: /srv/salt
+    state: directory
+  tags: dirs
+
+- name: Create salt _modules directory
+  file:
+    path: /srv/salt/_modules
+    state: directory
+  tags: dirs
+
+- name: Create salt _states directory
+  file:
+    path: /srv/salt/_states
+    state: directory
+  tags: dirs
+
+- name: Create salt _utils directory
+  file:
+    path: /srv/salt/_utils
+    state: directory
+  tags: dirs
+
+- name: Create templates directory
+  file:
+    path: /srv/salt/templates
+    state: directory
+  tags: dirs
+
+- name: Create root .ssh directory
+  file:
+    path: /root/.ssh
+    state: directory
+    mode: u=rw
+    owner: root
+
+- name: Copy root_ssh_config
+  template:
+    src: templates/root_ssh_config
+    dest: /root/.ssh/config
+    mode: u=rw
+    owner: root
+
+# jnpr / jnpr123
+- user:
+    name: jnpr
+    comment: "jnpr"
+    password: "$6$Wo2NjUgoVL4AL$tsH1Ax3ysapz3eKou/T3eAxKlZPcMixFd5BOf3FpipMh/yR9sPOYkqRjzWhx2Qm0invzwXsNee0ZbJbl1F7st."
+    group: sudo
+    shell: /bin/bash
+
+- name: Create jnpr .ssh directory
+  file:
+    path: /home/jnpr/.ssh
+    state: directory
+    mode: u=rw
+    owner: jnpr
+
+- name: Copy jnpr_ssh_config
+  template:
+    src: templates/jnpr_ssh_config
+    dest: /home/jnpr/.ssh/config
+    mode: u=rw
+    owner: jnpr
+
+# We need a bashrc and profile
+- name: Copy bashrc
+  copy:
+    src: templates/jnpr_bashrc
+    dest: /home/jnpr/.bashrc
+    mode: 0644
+    owner: jnpr
+ 
+- name: Copy profile
+  copy:
+    src: templates/jnpr_profile
+    dest: /home/jnpr/.profile
+    mode: 0644
+    owner: jnpr
+
+- name: Ensure salt-master is started
+  service:
+    name: salt-master
+    state: restarted
+    enabled: yes
+  tags: reqs
+
+- name: Ensure salt-minion is started
+  service:
+    name: salt-minion
+    state: restarted
+    enabled: yes
+
+- name: Ensure salt-api is started
+  service:
+    name: salt-api
+    state: restarted
+    enabled: yes
+
+- name: Accept the master's minion key
+  shell: sleep 60 && salt-key -A -y
+
+- name: Copy salt-events file
+  template:
+    src: templates/salt-events.service
+    dest: /etc/systemd/system/salt-events.service
+
+- name: Start salt-events
+  service:
+    name: salt-events
+    state: restarted
+    enabled: yes
+
+- name: Copy salt-proxy service file
+  template:
+    src: templates/salt-proxy.service
+    dest: /etc/systemd/system/salt-proxy@.service
+  tags: svc
+
+- name: stop ntp if necessary
+  service:
+    name: ntp
+    state: stopped
+  tags: ntp
+
+- name: set the date
+  command: ntpdate {{ ntp|first }}
+  tags: ntp
+
+- name: setup ntp.conf
+  template:
+    src: templates/ntp.cfg.j2
+    dest: /etc/ntp.conf
+  tags: ntp
+
+- name: restart ntp
+  service:
+    name: ntp
+    state: restarted
+    enabled: yes
+  tags: ntp
