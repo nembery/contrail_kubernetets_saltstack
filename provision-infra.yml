@@ -15,3 +15,6 @@
       become: True
     - role: kubernetes
       become: True
+    - role: openstack
+      become: True
+
