@@ -1,13 +1,7 @@
 controller-01 ansible_host=192.168.122.80 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
-compute-01 ansible_host=192.168.122.71 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
-compute-02 ansible_host=192.168.122.72 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
-compute-03 ansible_host=192.168.122.73 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
 
 [all]
 controller-01
-compute-01
-compute-02
-compute-03
 
 [infra-master]
 controller-01

@@ -223,12 +223,18 @@
 
 
 ### THINGS TO ADD HERE:
+# git clone https://github.com/kubernetes-incubator/external-storage.git
+
 # root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/serviceaccount.yaml
 # serviceaccount "nfs-client-provisioner" created
 # root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/clusterrole.yaml
 # clusterrole "nfs-client-provisioner-runner" created
 # root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/clusterrolebinding.yaml
 # clusterrolebinding "run-nfs-client-provisioner" created
+
+# THIS NEEDS TO BE PULLED OUT INTO A TEMPLATE, check out example kubernetes/templates/nfs_deployment.yaml 
+# should also templatize nfs_server and nfs_path in group_vars/all
+
 # root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/deployment.yaml 
 # deployment "nfs-client-provisioner" created
 # root@controller-01:~/external-storage/nfs-client# kubectl patch deployment nfs-client-provisioner -p '{"spec":{"template":{"spec":{"serviceAccount":"nfs-client-provisioner"}}}}'

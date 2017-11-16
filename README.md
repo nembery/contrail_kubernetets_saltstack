@@ -20,3 +20,5 @@ Lots of ideas borrowed from:
 
 0.01 - 10-17-17 initial project creation
 
+# FIXES required
+add nfs-common package to kubernetes role
