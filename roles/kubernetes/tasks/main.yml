@@ -155,6 +155,7 @@
     KUBECONFIG: /home/juniper/.kube/config
   tags: helm
 
+# we need to do this as juniper user as well
 - name: helm init
   command: helm init --service-account tiller
   environment:
@@ -173,21 +174,23 @@
     dest: /home/juniper/fission_pvc.yml
   tags: fission
 
-- name: Create fission pv
-  kubernetes:
-    api_endpoint: '{{ ansible_hostname }}'
-    insecure: true
-    file_reference: /home/juniper/fission_pv.yml
-    state: present
-  tags: fission
 
-- name: Create fission pvc
-  kubernetes:
-    api_endpoint: '{{ ansible_hostname }}'
-    insecure: true
-    file_reference: /home/juniper/fission_pvc.yml
-    state: present
-  tags: fission
+# THIS DOESNT WORK?
+#- name: Create fission pv
+#  kubernetes:
+#    api_endpoint: '{{ ansible_hostname }}:6443'
+#    insecure: true
+#    file_reference: /home/juniper/fission_pv.yml
+#    state: present
+#  tags: fission
+
+#- name: Create fission pvc
+#  kubernetes:
+#    api_endpoint: '{{ ansible_hostname }}:6443'
+#    insecure: true
+#    file_reference: /home/juniper/fission_pvc.yml
+#    state: present
+#  tags: fission
 
 #- name: create fission pv
 #  command: kubectl create -f /home/juniper/fission_pv.yml
@@ -201,11 +204,7 @@
 #    KUBECONFIG: /home/juniper/.kube/config
 #  tags: fission
 
-- name:  Install Fission 0.3.0
-  command: helm install --namespace fission --set serviceType=NodePort --set persistence.existingClaim=fission-storage-pvc https://github.com/fission/fission/releases/download/0.3.0/fission-all-0.3.0.tgz
-  environment:
-    KUBECONFIG: /home/juniper/.kube/config
-  tags: fission-install
+
 
 - name:  download Fission-cli
   command: curl -Lo /home/juniper/fission https://github.com/fission/fission/releases/download/0.3.0/fission-cli-linux
@@ -221,3 +220,43 @@
     mode: u=rx,g=rx,o=rx
     remote_src: yes
   tags: fission
+
+
+### THINGS TO ADD HERE:
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/serviceaccount.yaml
+# serviceaccount "nfs-client-provisioner" created
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/clusterrole.yaml
+# clusterrole "nfs-client-provisioner-runner" created
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/clusterrolebinding.yaml
+# clusterrolebinding "run-nfs-client-provisioner" created
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/deployment.yaml 
+# deployment "nfs-client-provisioner" created
+# root@controller-01:~/external-storage/nfs-client# kubectl patch deployment nfs-client-provisioner -p '{"spec":{"template":{"spec":{"serviceAccount":"nfs-client-provisioner"}}}}'
+# deployment "nfs-client-provisioner" patched
+# root@controller-01:~/external-storage/nfs-client# 
+#
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/class.yaml 
+# storageclass "managed-nfs-storage" created
+# root@controller-01:~/external-storage/nfs-client# kubectl patch storageclass managed-nfs-storage -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+# storageclass "managed-nfs-storage" patched
+# root@controller-01:~/external-storage/nfs-client# kubectl get storageclass 
+# NAME                            TYPE
+# managed-nfs-storage (default)   fuseim.pri/ifs   
+
+# Do this after the NFS dynamic provisioner is complete
+# - name:  Install Fission 0.3.0
+#  command: helm install --namespace fission --set serviceType=NodePort --set persistence.existingClaim=fission-storage-pvc https://github.com/fission/fission/releases/download/0.3.0/fission-all-0.3.0.tgz
+#  environment:
+#    KUBECONFIG: /home/juniper/.kube/config
+#  tags: fission-install
+
+#root@controller-01:~/external-storage/nfs-client# helm repo add fission-charts https://fission.github.io/fission-charts/
+#"fission-charts" has been added to your repositories
+#.root@controller-01:~/external-storage/nfs-client# helm repo update
+#Hang tight while we grab the latest from your chart repositories...
+#...Skip local chart repository
+#...Successfully got an update from the "fission-charts" chart repository
+#...Successfully got an update from the "stable" chart repository
+#Update Complete. ⎈ Happy Helming!⎈ 
+# helm install --namespace fission --set serviceType=NodePort -n fission-all fission-charts/fission-all --version 0.3.0
+# helm install fission-charts/fission-workflows
