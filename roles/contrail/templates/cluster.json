@@ -1,0 +1,55 @@
+{
+    "server": [
+        {
+            "cluster_id": "{{ cluster_id }}",
+            "domain": "{{ domain }}",
+            "id": "{{ ansible_nodename }}",
+            "network": {
+                "interfaces": [
+                    {
+                        "default_gateway": "{{ ansible_default_ipv4['gateway'] }}",
+                        "ip_address": "{{ hostvars[inventory_hostname]['ansible_' + network_interface]['ipv4']['address'] }}",
+                        "mac_address": "{{ hostvars[inventory_hostname]['ansible_' + network_interface]['macaddress'] }}",
+                        "name": "{{ network_interface }}"
+                    }
+                ],
+                "management_interface": "{{ network_interface }}",
+                "provisioning": "kickstart"
+            },
+            "password": "{{ ansible_become_pass }}",
+            "roles": [
+                "openstack", "contrail-controller", "contrail-analytics", "contrail-analyticsdb", "contrail-compute"
+            ],
+            "parameters": {
+            }
+        }
+    ],
+    "image": [
+        {
+            "category": "package",
+            "id": "contrail_image_4",
+            "path": "/root/contrail-cloud-docker_4.0.2.0-35-newton_xenial.tgz",
+            "type": "contrail-ubuntu-package",
+            "version": "mainline"
+        }
+    ],
+    "cluster": [
+        {
+            "id": "{{ cluster_id }}",
+            "parameters": {
+                "provision": {
+                    "contrail_4": {
+                    },
+                    "contrail": {
+                    },
+                    "openstack": {
+                        "openstack_manage_amqp": true,
+                        "keystone": {
+                            "admin_password": "{{ contrail_password }}"
+                        }
+                    }
+                }
+            }
+        }
+    ]
+}

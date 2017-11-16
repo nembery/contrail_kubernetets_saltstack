@@ -1,0 +1,15 @@
+---
+# Preload facts
+- hosts: all
+  tasks:
+     - name: Ping 
+       ping:
+
+- name: Apply role baremetal
+  hosts: baremetal
+  gather_facts: yes
+  roles:
+    - { role: baremetal,
+        tags: baremetal }
+
+

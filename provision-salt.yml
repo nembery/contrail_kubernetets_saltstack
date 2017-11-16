@@ -1,0 +1,10 @@
+---
+
+# this playbook will standup a nora infrastructure
+
+- hosts: infra-master
+  become: True
+  roles:
+    - role: salt-master 
+      become: True
+

@@ -1,0 +1,91 @@
+---
+- name: Install packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  with_items:
+    - docker.io
+    - ntp
+    - apt-transport-https
+    - python-pip
+    - sshpass
+    - python-oslo-config
+    - python-dev
+    - libffi-dev
+    - gcc
+    - libssl-dev
+    - qemu-kvm
+
+- name: Install non-broken python openssl
+  pip:
+    name: pyOpenSSL
+    version: 16.2.0
+
+- name: upgrade pip
+  pip:
+    name: pip
+    state: latest
+
+- name: upgrade Ansible
+  pip:
+    name: ansible
+    state: latest
+
+- name: clone contrail-kolla repo
+  git:
+    repo: https://github.com/Juniper/contrail-ansible.git
+    dest: /opt/contrail-ansible
+    version: R4.0
+    force: yes
+  tags:
+    - contrail
+
+- name: copy ssh_key
+  copy:
+    src: /home/juniper/.ssh/id_rsa
+    dest: /root/.ssh/id_rsa
+    mode: 0600
+  tags: 
+    - sshkeys
+
+- name: copy globals.yml 
+  template:
+    src: templates/globals.yml
+    dest: /opt/contrail-ansible/kolla-ansible/etc/kolla/globals.yml
+
+- name: copy passwords.yml 
+  template:
+    src: templates/passwords.yml
+    dest: /opt/contrail-ansible/kolla-ansible/etc/kolla/passwords.yml
+
+- name: copy inventory
+  template:
+    src: templates/allinone
+    dest: /opt/contrail-ansible/kolla-ansible/ansible/hosts
+
+- name: copy kolla_group_vars
+  copy:
+    src: templates/kolla_group_vars
+    dest: /opt/contrail-ansible/kolla-ansible/ansible/group_vars/all.yml
+
+- name: copy kolla_pb
+  copy:
+    src: templates/kolla_host_pb
+    dest: /opt/contrail-ansible/kolla-ansible/ansible/kolla-host.yml
+
+- name: copy opencontrail inventory
+  template:
+    src: templates/opencontrail_hosts
+    dest: /opt/contrail-ansible/playbooks/inventory/my-inventory/hosts
+
+- name: copy opencontrail group_vars/all
+  template:
+    src: templates/opencontrail_group_vars
+    dest: /opt/contrail-ansible/playbooks/inventory/my-inventory/group_vars/all.yml
+
+- name: bootstrap control node
+  shell: ansible-playbook -i hosts -e @../etc/kolla/globals.yml -e @../etc/kolla/passwords.yml -e action=bootstrap-servers kolla-host.yml
+  args:
+    chdir: /opt/contrail-ansible/kolla-ansible/ansible
+  tags: bootstrap

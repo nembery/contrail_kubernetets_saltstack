@@ -1,0 +1,46 @@
+---
+
+- name: Execute bootstrap_salt
+  command: /var/tmp/bootstrap_salt.sh -P -g {{ git_repo }} git {{ git_branch }}
+  args:
+    creates: /usr/bin/salt-minion
+
+- name: Copy salt-minion configuration file
+  template:
+    src: templates/salt_minion.cfg.j2
+    dest: /etc/salt/minion
+
+- name: Ensure salt-minion is started
+  service:
+    name: salt-minion
+    state: restarted
+    enabled: yes
+
+- name: Install apt-transport-https
+  apt:
+    name: apt-transport-https
+    state: latest
+    update_cache: true
+
+- name: Add Google key to apt
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes repo
+  apt_repository:
+    repo: 'deb http://apt.kubernetes.io/ kubernetes-xenial main'
+    filename: kubernetes
+    state: present
+
+- name: Install packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  with_items:
+    - docker.io
+    - kubelet=1.7.10-00
+    - kubeadm=1.7.10-00
+    - kubectl=1.7.10-00
+    - kubernetes-cni

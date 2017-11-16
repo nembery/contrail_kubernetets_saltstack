@@ -1,8 +1,26 @@
-controller-01 ansible_host=192.168.122.34 ansible_connection=ssh ansible_user=juniper ansible_become_pass=juniper123
-compute-01 ansible_host=192.168.122.35 ansible_connection=ssh ansible_user=juniper ansible_become_pass=juniper123
+controller-01 ansible_host=192.168.122.70 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
+compute-01 ansible_host=192.168.122.71 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
+compute-02 ansible_host=192.168.122.72 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
+compute-03 ansible_host=192.168.122.73 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
+
+[all]
+controller-01
+compute-01
+compute-02
+compute-03
 
 [infra-master]
 controller-01
 
-[openstack]
+[openstack-controller]
+
+[contrail]
+
+[openstack-compute]
+
+[minions]
+controller-01
 compute-01
+compute-02
+compute-03
+

@@ -24,33 +24,53 @@
     update_cache: true
   with_items:
     - docker.io
-    - kubelet
-    - kubeadm
-    - kubectl
+    - kubelet=1.7.10-00
+    - kubeadm=1.7.10-00
+    - kubectl=1.7.10-00
     - kubernetes-cni
 
 # taken from here: https://github.com/dcj/ansible-kubeadm-cluster/blob/develop/roles/admission_token/tasks/generate.yml
 
 - name: Generate admission_token
-  command: python -c 'import random; print "%0x.%0x" % (random.SystemRandom().getrandbits(3*8), random.SystemRandom().getrandbits(8*8))'
+  raw: echo $(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 6 | head -n 1).$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
   register: token_raw
+  tags: 
+   - token
+   - deploy
 
 - set_fact:
-    admission_token: '{{ token_raw.stdout }}'
+    admission_token: "{{ token_raw.stdout_lines[1] }}"
+  tags: 
+   - token
+   - deploy
+
+- name:
+  debug:
+    var: token_raw
+  tags: 
+   - token
+   - deploy
 
 - file:
-    path: /etc/infra/
+    path: /etc/nora/
     state: directory
+  tags: 
+   - token
+   - deploy
 
 - name: Save token as tokens/cluster_name.yml
   copy:
-    dest: /etc/infra/kubernetes_join_token.yml
+    dest: /etc/nora/kubernetes_join_token.yml
     content: "admission_token: {{ admission_token }}"
+  tags: 
+   - token
+   - deploy
 
 - name: Initialize master
-  command: kubeadm init --token {{ admission_token }}
+  command: kubeadm init --token {{ admission_token }} --pod-network-cidr={{ k8_network_cidr }} --skip-preflight-checks
   args:
     creates: /etc/kubernetes/pki 
+  tags: deploy
 
 - name: create .kube directory
   file:
@@ -58,14 +78,12 @@
     state: directory
     owner: juniper
     group: juniper
-  tags:
-    - contrail
+  tags: deploy
 
 - name: copy admin.conf
   shell: cp /etc/kubernetes/admin.conf /home/juniper/.kube/config
   become: True
-  tags:
-    - contrail
+  tags: deploy
 
 - name: perms on admin.conf
   file:
@@ -73,42 +91,133 @@
     owner: juniper
     group: juniper
     mode: 0700
-  tags:
-    - contrail
+  tags: deploy
 
-- name: clone contrail-docker repo
-  git:
-    repo: https://github.com/Juniper/contrail-docker.git
-    version: R4.0
-    dest: /opt/contrail-docker
-  tags:
-    - contrail
-  
-- name: copy manifest
+- name: allow stuff on master
+  command: kubectl taint nodes --all node-role.kubernetes.io/master-
+  ignore_errors: True
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: deploy
+
+- name: Copy flannel configuration file
   template:
-    src: templates/infra-manifest.j2
-    dest: /opt/contrail-docker/kubernetes/manifests/juniper-infra.yaml
-  tags:
-    - contrail
+    src: templates/kube-flannel.j2
+    dest: /etc/nora/kube-flannel.yml
+  tags: deploy
 
-# FIXME - make this idempotent
-- name: patch_kube_dns_liveliness_probe
-  command: 'kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/0/readinessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:8081/readiness"]}}}]" -n kube-system'
+- name: deploy flannel
+  command: kubectl apply -f /etc/nora/kube-flannel.yml
   environment:
     KUBECONFIG: /home/juniper/.kube/config
- 
-# FIXME - make this idempotent
-- name: patch kube_dns_readiness_probe
-  command: 'kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/0/livenessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:10054/healthcheck/kubedns"]}}}]" -n kube-system && kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/1/livenessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:10054/healthcheck/dnsmasq"]}}}]" -n kube-system && kubectl patch deploy/kube-dns --type json  -p="[{"op": "replace", "path": "/spec/template/spec/containers/2/livenessProbe", "value": {"exec": {"command": ["wget", "-O", "-", "http://127.0.0.1:10054/metrics"]}}}]" -n kube-system'
-  environment:
-    KUBECONFIG: /home/juniper/.kube/config
-     
-# FIXME - make this idempotent
-- name: deploy opencontrail
-  command: kubectl apply -f /opt/contrail-docker/kubernetes/manifests/juniper-infra.yaml
-  tags:
-    - contrail
-  environment:
-    KUBECONFIG: /home/juniper/.kube/config
+  tags: deploy
 
-  
+- name: create helm dir
+  file:
+    path: /home/juniper/helm
+    state: directory
+  tags: helm
+
+- name: Download helm
+  get_url:
+    url: https://kubernetes-helm.storage.googleapis.com/helm-v2.7.0-linux-amd64.tar.gz
+    dest: /home/juniper/helm-v2.7.0-linux-amd64.tar.gz
+  tags: helm
+
+- name: Extract helm
+  unarchive:
+    src: /home/juniper/helm-v2.7.0-linux-amd64.tar.gz
+    dest: /home/juniper/helm/
+    remote_src: yes
+  tags: helm
+
+- name: move helm executable
+  shell: mv /home/juniper/helm/linux-amd64/helm /usr/local/bin/helm
+  creates: /usr/local/bin/helm
+  tags: helm
+
+- name: ensure helm mode
+  file:
+    path: /usr/local/bin/helm
+    mode: u=rx,g=rx,o=rx
+    owner: root
+  tags: helm
+
+- name: create tiller sa
+  command: kubectl -n kube-system create sa tiller
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: helm
+
+- name: create tiller crb
+  command: kubectl create clusterrolebinding tiller --clusterrole cluster-admin --serviceaccount=kube-system:tiller
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: helm
+
+- name: helm init
+  command: helm init --service-account tiller
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: helm
+
+- name: Create fission PV template
+  copy:
+    src: templates/fission_pv.yml
+    dest: /home/juniper/fission_pv.yml
+  tags: fission
+
+- name: Create fission PVC template
+  copy:
+    src: templates/fission_pvc.yml
+    dest: /home/juniper/fission_pvc.yml
+  tags: fission
+
+- name: Create fission pv
+  kubernetes:
+    api_endpoint: '{{ ansible_hostname }}'
+    insecure: true
+    file_reference: /home/juniper/fission_pv.yml
+    state: present
+  tags: fission
+
+- name: Create fission pvc
+  kubernetes:
+    api_endpoint: '{{ ansible_hostname }}'
+    insecure: true
+    file_reference: /home/juniper/fission_pvc.yml
+    state: present
+  tags: fission
+
+#- name: create fission pv
+#  command: kubectl create -f /home/juniper/fission_pv.yml
+#  environment:
+#    KUBECONFIG: /home/juniper/.kube/config
+#  tags: fission
+
+#- name: create fission pvc
+#  command: kubectl create -f /home/juniper/fission_pvc.yml
+#  environment:
+#    KUBECONFIG: /home/juniper/.kube/config
+#  tags: fission
+
+- name:  Install Fission 0.3.0
+  command: helm install --namespace fission --set serviceType=NodePort --set persistence.existingClaim=fission-storage-pvc https://github.com/fission/fission/releases/download/0.3.0/fission-all-0.3.0.tgz
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: fission-install
+
+- name:  download Fission-cli
+  command: curl -Lo /home/juniper/fission https://github.com/fission/fission/releases/download/0.3.0/fission-cli-linux
+  args:
+    chdir: /home/juniper
+  creates: /home/juniper/fission
+  tags: fission
+
+- name:  copy Fission-cli
+  copy: 
+    src: /home/juniper/fission
+    dest: /usr/local/bin/fission
+    mode: u=rx,g=rx,o=rx
+    remote_src: yes
+  tags: fission

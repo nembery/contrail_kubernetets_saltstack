@@ -1,20 +1,40 @@
 ---
 
-# this playbook will standup a standalone kubernetes + opencontrail + saltstack server. More servers can be added later with other tools
+# this playbook will standup a nora infrastructure
 
-- hosts: infra-master
-  gather_facts: False
+- hosts: all
   become: True
+  gather_facts: False
   tasks:
     - include_tasks: tasks/install_python.yml
-    - include_tasks: tasks/install_salt_deps_for_git.yml
+
+- hosts: all
+  become: True
+  gather_facts: True
+  tasks:
+    - include_tasks: tasks/install_ntp.yml
+    - include_tasks: tasks/install_salt_deps.yml
 
 - hosts: infra-master
+  become: True
   roles:
-    - role: infra-master
+    - role: salt-master 
       become: True
     - role: kubernetes
       become: True
-    - role: openstack
+
+- hosts: salt-minion
+  roles:
+    - role: salt-minion
+      become: True
+
+- hosts: openstack-controller
+  roles:
+    - role: openstack-controller
+      become: True
+
+- hosts: contrail
+  roles:
+    - role: contrail
       become: True
 

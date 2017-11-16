@@ -1,0 +1,13 @@
+---
+- name: Add all ansible hosts to hostfile
+  lineinfile:
+    dest: /etc/hosts
+    line: '{{ hostvars[item]["ansible_default_ipv4"]["address"] }} {{ item }}.{{ domain }}      {{ item }}'
+  with_items: '{{ groups["all"] }}'
+  tags: hf
+
+- name: Add all domain_name to resolve.conf
+  lineinfile:
+    dest: /etc/resolv.conf
+    line: 'search {{ domain }}'
+  tags: hf

@@ -1,7 +1,15 @@
 ---
 
+- name: check if apt updated today
+  raw: sudo find /var/lib/apt/lists/ -mtime -1 | grep apt
+  register: apt_out
+  failed_when: apt_out.rc != 0 and apt_out.rc != 1
+  tags: apt
+
 - name: Update apt
   raw: apt-get update
+  when: apt_out.rc != 0
+  tags: apt
 
 - name: Install Python on Ubuntu 
   raw: apt-get install python -y

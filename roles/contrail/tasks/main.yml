@@ -1,0 +1,49 @@
+---
+
+- name: copy ssh_key
+  copy:
+    src: /home/juniper/.ssh/id_rsa
+    dest: /root/.ssh/id_rsa
+    mode: 0600
+
+- name: copy csm.deb
+  copy:
+    src: /opt/pkgs/contrail-server-manager-installer_4.0.2.0-35~xenial.deb
+    dest: /root/contrail-server-manager-installer_4.0.2.0-35~xenial.deb
+
+- name: copy newton installer
+  copy:
+    src: /opt/pkgs/contrail-cloud-docker_4.0.2.0-35-newton_xenial.tgz
+    dest: /root/contrail-cloud-docker_4.0.2.0-35-newton_xenial.tgz
+
+- name: copy cluster config
+  template:
+    src: templates/cluster.json
+    dest: /root/cluster.json
+
+- name: Build simple hosts file
+  lineinfile:
+    dest: /etc/hosts
+    line: '{{ ansible_default_ipv4.address}}	{{ ansible_hostname }}.{{ domain }} 	{{ ansible_hostname }}'
+    insertafter: '127.0.0.1 localhost'
+  tags: hf
+
+- name: Add all ansible hosts to hostfile
+  lineinfile:
+    dest: /etc/hosts
+    line: '{{ hostvars[item]["ansible_default_ipv4"]["address"] }} {{ item }}.{{ domain }}	{{ item }}'
+  with_items: '{{ groups["all"] }}'
+  tags: hf
+
+- name: Install CSM
+  apt:
+    deb: /root/contrail-server-manager-installer_4.0.2.0-35~xenial.deb
+
+- name: sleep for 30 seconds and continue with play
+  wait_for: timeout=30
+
+- name: Build the cluster
+  shell: /opt/contrail/contrail_server_manager/provision_containers.sh -j cluster.json
+  args:
+    chdir: /root
+  tags: build

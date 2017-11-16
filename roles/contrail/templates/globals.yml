@@ -1,0 +1,28 @@
+---
+kolla_base_distro: "ubuntu"
+openstack_release: "4.0.0"
+kolla_internal_vip_address: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+enable_haproxy: "no"
+keystone_admin_url: "http://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:35357"
+keystone_internal_url: "http://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:5000"
+keystone_public_url: "http://{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}:5000"
+enable_keystone_v3: "yes"
+keystone_admin_project_name: "admin"
+keystone_admin_project_domain_name: "Default"
+enable_nova: "yes"
+network_interface: "{{ network_interface }}"
+neutron_external_interface: "{{ external_interface }}"
+neutron_plugin_agent: "openvswitch"
+#nova_compute_image_full: "gokulpch/ubuntu-binary-nova-compute:5.0.0"
+#neutron_server_image_full: "gokulpch/ubuntu-binary-neutron-server:5.0.0"
+nova_compute_image_full: "opencontrail/ubuntu-binary-nova-compute:4.0.1.0"
+neutron_server_image_full: "opencontrail/ubuntu-binary-neutron-server:4.0.1.0"
+enable_neutron_opencontrail: "yes"
+contrail_api_interface_address: "{{ hostvars[inventory_hostname]['ansible_default_ipv4']['address'] }}"
+designate_backend: "bind9"
+designate_ns_record: "nora.juniper.net"
+tempest_image_id:
+tempest_flavor_ref_id:
+tempest_public_network_id:
+tempest_floating_network_name:
+

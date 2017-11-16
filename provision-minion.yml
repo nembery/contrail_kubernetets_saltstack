@@ -1,0 +1,22 @@
+---
+
+# this playbook will standup a standalone kubernetes + opencontrail + saltstack server. More servers can be added later with other tools
+
+- hosts: minions
+  gather_facts: False
+  become: True
+  tasks:
+    - include_tasks: tasks/install_python.yml
+
+- hosts: minions
+  gather_facts: True
+  become: True
+  tasks:
+    - include_tasks: tasks/install_ntp.yml
+    - include_tasks: tasks/install_salt_deps.yml
+
+- hosts: minions
+  roles:
+    - role: salt-minion
+      become: True
+

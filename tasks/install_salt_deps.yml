@@ -39,3 +39,20 @@
   file:
     path: "/var/tmp/bootstrap_salt.sh"
     mode: "a+x"
+
+- name: Build simple hosts file
+  lineinfile:
+    dest: /etc/hosts
+    line: '127.0.1.1 {{ ansible_hostname }}'
+    regexp: '^127.0.1.1'
+    insertafter: '127.0.0.1 localhost'
+  tags: hf
+
+- name: Add all ansible hosts to hostfile
+  lineinfile:
+    dest: /etc/hosts
+    line: '{{ hostvars[item]["ansible_default_ipv4"]["address"] }} {{ item }}'
+  with_items: '{{ groups["all"] }}'
+  tags: hf
+
+

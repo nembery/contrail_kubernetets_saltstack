@@ -9,8 +9,6 @@
     - python-git
     - jq
     - curl
-    - ntp
-    - ntpdate
   tags: reqs
 
 - name: install rest api
@@ -29,16 +27,23 @@
 
 - name: install Ansible
   pip:
-    name: ansible
+    name: ansible==2.3.0
     state: latest
 
-- name: Build simple hosts file
-  lineinfile:
-    dest: /etc/hosts
-    line: '127.0.1.1 {{ ansible_nodename }}'
-    regexp: '^127.0.1.1'
-    insertafter: '127.0.0.1 localhost'
-  tags: hf
+#- name: Build simple hosts file
+#  lineinfile:
+#    dest: /etc/hosts
+#    line: '127.0.1.1 {{ ansible_hostname }}'
+#    regexp: '^127.0.1.1'
+#    insertafter: '127.0.0.1 localhost'
+#  tags: hf
+
+#- name: Add all ansible hosts to hostfile
+#  lineinfile:
+#    dest: /etc/hosts
+#    line: '{{ hostvars[item]["ansible_default_ipv4"]["address"] }} {{ item }}'
+#  with_items: '{{ groups["all"] }}'
+#  tags: hf
 
 - name: Execute bootstrap_salt
   command: /var/tmp/bootstrap_salt.sh -P -M -g {{ git_repo }} git {{ git_branch }}
@@ -182,8 +187,13 @@
     state: restarted
     enabled: yes
 
+- name: check accepted keys
+  shell: salt-key -l acc | grep controller-01
+  register: master_key
+
 - name: Accept the master's minion key
   shell: sleep 60 && salt-key -A -y
+  when: master_key.rc != 0
 
 - name: Copy salt-events file
   template:
@@ -202,25 +212,3 @@
     dest: /etc/systemd/system/salt-proxy@.service
   tags: svc
 
-- name: stop ntp if necessary
-  service:
-    name: ntp
-    state: stopped
-  tags: ntp
-
-- name: set the date
-  command: ntpdate {{ ntp|first }}
-  tags: ntp
-
-- name: setup ntp.conf
-  template:
-    src: templates/ntp.cfg.j2
-    dest: /etc/ntp.conf
-  tags: ntp
-
-- name: restart ntp
-  service:
-    name: ntp
-    state: restarted
-    enabled: yes
-  tags: ntp
