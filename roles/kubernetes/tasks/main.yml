@@ -24,9 +24,9 @@
     update_cache: true
   with_items:
     - docker.io
-    - kubelet=1.7.10-00
-    - kubeadm=1.7.10-00
-    - kubectl=1.7.10-00
+    - kubelet
+    - kubeadm
+    - kubectl
     - kubernetes-cni
     - nfs-common
 
@@ -163,52 +163,14 @@
     KUBECONFIG: /home/juniper/.kube/config
   tags: helm
 
-- name: Create fission PV template
+- name: Create NFS Dynamic provisioning config
   copy:
-    src: templates/fission_pv.yml
-    dest: /home/juniper/fission_pv.yml
+    src: templates/nfs_deployment.yaml
+    dest: /home/juniper/nfs_deployment.yaml
   tags: fission
-
-- name: Create fission PVC template
-  copy:
-    src: templates/fission_pvc.yml
-    dest: /home/juniper/fission_pvc.yml
-  tags: fission
-
-
-# THIS DOESNT WORK?
-#- name: Create fission pv
-#  kubernetes:
-#    api_endpoint: '{{ ansible_hostname }}:6443'
-#    insecure: true
-#    file_reference: /home/juniper/fission_pv.yml
-#    state: present
-#  tags: fission
-
-#- name: Create fission pvc
-#  kubernetes:
-#    api_endpoint: '{{ ansible_hostname }}:6443'
-#    insecure: true
-#    file_reference: /home/juniper/fission_pvc.yml
-#    state: present
-#  tags: fission
-
-#- name: create fission pv
-#  command: kubectl create -f /home/juniper/fission_pv.yml
-#  environment:
-#    KUBECONFIG: /home/juniper/.kube/config
-#  tags: fission
-
-#- name: create fission pvc
-#  command: kubectl create -f /home/juniper/fission_pvc.yml
-#  environment:
-#    KUBECONFIG: /home/juniper/.kube/config
-#  tags: fission
-
-
 
 - name:  download Fission-cli
-  command: curl -Lo /home/juniper/fission https://github.com/fission/fission/releases/download/0.3.0/fission-cli-linux
+  command: curl -Lo /home/juniper/fission https://github.com/fission/fission/releases/download/0.4.0/fission-cli-linux
   args:
     chdir: /home/juniper
   creates: /home/juniper/fission
@@ -251,8 +213,8 @@
 # managed-nfs-storage (default)   fuseim.pri/ifs   
 
 # Do this after the NFS dynamic provisioner is complete
-# - name:  Install Fission 0.3.0
-#  command: helm install --namespace fission --set serviceType=NodePort --set persistence.existingClaim=fission-storage-pvc https://github.com/fission/fission/releases/download/0.3.0/fission-all-0.3.0.tgz
+# - name:  Install Fission 0.4.0
+#  command: helm install --namespace fission --set serviceType=NodePort --set persistence.existingClaim=fission-storage-pvc https://github.com/fission/fission/releases/download/0.4.0/fission-all-0.4.0.tgz
 #  environment:
 #    KUBECONFIG: /home/juniper/.kube/config
 #  tags: fission-install
@@ -265,5 +227,5 @@
 #...Successfully got an update from the "fission-charts" chart repository
 #...Successfully got an update from the "stable" chart repository
 #Update Complete. ⎈ Happy Helming!⎈ 
-# helm install --namespace fission --set serviceType=NodePort -n fission-all fission-charts/fission-all --version 0.3.0
+# helm install --namespace fission --set serviceType=NodePort -n fission-all fission-charts/fission-all --version 0.4.0
 # helm install fission-charts/fission-workflows

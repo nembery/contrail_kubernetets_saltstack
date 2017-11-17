@@ -22,3 +22,11 @@ Lots of ideas borrowed from:
 
 # FIXES required
 add nfs-common package to kubernetes role
+
+Add Fission URLS to .bashrc for juniper user
+
+```bash
+# Added for NORA / Fission
+export FISSION_URL=http://192.168.122.80:31313
+export FISSION_ROUTER=http://192.168.122.80:31314
+```
