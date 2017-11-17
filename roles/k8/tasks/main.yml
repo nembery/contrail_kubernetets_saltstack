@@ -1,0 +1,254 @@
+---
+
+- name: Install apt-transport-https
+  apt:
+    name: apt-transport-https
+    state: latest
+    update_cache: true
+
+- name: Add Google key to apt
+  apt_key:
+    url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    state: present
+
+- name: Add Kubernetes repo
+  apt_repository:
+    repo: 'deb http://apt.kubernetes.io/ kubernetes-xenial main'
+    filename: kubernetes
+    state: present
+
+- name: Install packages
+  apt:
+    name: '{{ item }}'
+    state: present
+    update_cache: true
+  with_items:
+    - docker.io
+    - kubelet
+    - kubeadm
+    - kubectl
+    - kubernetes-cni
+    - nfs-common
+
+# taken from here: https://github.com/dcj/ansible-kubeadm-cluster/blob/develop/roles/admission_token/tasks/generate.yml
+
+- name: Generate admission_token
+  raw: echo $(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 6 | head -n 1).$(cat /dev/urandom | tr -dc 'a-z0-9' | fold -w 16 | head -n 1)
+  register: token_raw
+  tags: 
+   - token
+   - deploy
+
+- set_fact:
+    admission_token: "{{ token_raw.stdout_lines[1] }}"
+  tags: 
+   - token
+   - deploy
+
+- name:
+  debug:
+    var: token_raw
+  tags: 
+   - token
+   - deploy
+
+- file:
+    path: /etc/nora/
+    state: directory
+  tags: 
+   - token
+   - deploy
+
+- name: Save token as tokens/cluster_name.yml
+  copy:
+    dest: /etc/nora/kubernetes_join_token.yml
+    content: "admission_token: {{ admission_token }}"
+  tags: 
+   - token
+   - deploy
+
+#- name: Initialize master
+##  command: kubeadm init --token {{ admission_token }} --pod-network-cidr={{ k8_network_cidr }} --skip-preflight-checks
+#  args:
+#    creates: /etc/kubernetes/pki 
+#  tags: deploy
+#
+# TEST - don't use auth token for init
+
+- name: Initialize master
+  command: kubeadm init --pod-network-cidr={{ k8_network_cidr }} --service-cidr={{ k8_service_cidr }} --skip-preflight-checks
+  args:
+    creates: /etc/kubernetes/pki 
+  tags: deploy
+
+- name: create .kube directory
+  file:
+    path: /home/juniper/.kube
+    state: directory
+    owner: juniper
+    group: juniper
+  tags: deploy
+
+- name: copy admin.conf
+  shell: cp /etc/kubernetes/admin.conf /home/juniper/.kube/config
+  become: True
+  tags: deploy
+
+- name: perms on admin.conf
+  file:
+    path: /home/juniper/.kube/config
+    owner: juniper
+    group: juniper
+    mode: 0700
+  tags: deploy
+
+- name: allow stuff on master
+  command: kubectl taint nodes --all node-role.kubernetes.io/master-
+  ignore_errors: True
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: deploy
+
+- name: Copy flannel configuration file
+  template:
+    src: templates/kube-flannel.j2
+    dest: /etc/nora/kube-flannel.yml
+  tags: deploy
+
+#- name: deploy flannel
+#  command: kubectl apply -f /etc/nora/kube-flannel.yml
+#  environment:
+#    KUBECONFIG: /home/juniper/.kube/config
+#  tags: deploy
+
+
+- name: deploy flannel
+  command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: deploy
+
+- name: create helm dir
+  file:
+    path: /home/juniper/helm
+    state: directory
+  tags: helm
+
+- name: Download helm
+  get_url:
+    url: https://kubernetes-helm.storage.googleapis.com/helm-v2.7.0-linux-amd64.tar.gz
+    dest: /home/juniper/helm-v2.7.0-linux-amd64.tar.gz
+  tags: helm
+
+- name: Extract helm
+  unarchive:
+    src: /home/juniper/helm-v2.7.0-linux-amd64.tar.gz
+    dest: /home/juniper/helm/
+    remote_src: yes
+  tags: helm
+
+- name: move helm executable
+  shell: mv /home/juniper/helm/linux-amd64/helm /usr/local/bin/helm
+  creates: /usr/local/bin/helm
+  tags: helm
+
+- name: ensure helm mode
+  file:
+    path: /usr/local/bin/helm
+    mode: u=rx,g=rx,o=rx
+    owner: root
+  tags: helm
+
+- name: create tiller sa
+  command: kubectl -n kube-system create sa tiller
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: helm
+
+- name: create tiller crb
+  command: kubectl create clusterrolebinding tiller --clusterrole cluster-admin --serviceaccount=kube-system:tiller
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: helm
+
+# we need to do this as juniper user as well
+- name: helm init
+  command: helm init --service-account tiller
+  environment:
+    KUBECONFIG: /home/juniper/.kube/config
+  tags: helm
+
+- name: Create NFS Dynamic provisioning config
+  copy:
+    src: templates/nfs_deployment.yaml
+    dest: /home/juniper/nfs_deployment.yaml
+  tags: fission
+
+- name:  download Fission-cli
+  command: curl -Lo /home/juniper/fission https://github.com/fission/fission/releases/download/0.4.0/fission-cli-linux
+  args:
+    chdir: /home/juniper
+  creates: /home/juniper/fission
+  tags: fission
+
+- name:  copy Fission-cli
+  copy: 
+    src: /home/juniper/fission
+    dest: /usr/local/bin/fission
+    mode: u=rx,g=rx,o=rx
+    remote_src: yes
+  tags: fission
+
+
+### THINGS TO ADD HERE:
+
+# We need to add this to /etc/sysctl.conf
+# /etc/sysctl.conf 
+#
+# net.bridge.bridge-nf-call-iptables=1
+# net.bridge.bridge-nf-call-ip6tables=1
+#
+
+# git clone https://github.com/kubernetes-incubator/external-storage.git
+
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/serviceaccount.yaml
+# serviceaccount "nfs-client-provisioner" created
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/clusterrole.yaml
+# clusterrole "nfs-client-provisioner-runner" created
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/auth/clusterrolebinding.yaml
+# clusterrolebinding "run-nfs-client-provisioner" created
+
+# THIS NEEDS TO BE PULLED OUT INTO A TEMPLATE, check out example kubernetes/templates/nfs_deployment.yaml 
+# should also templatize nfs_server and nfs_path in group_vars/all
+
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/deployment.yaml 
+# deployment "nfs-client-provisioner" created
+# root@controller-01:~/external-storage/nfs-client# kubectl patch deployment nfs-client-provisioner -p '{"spec":{"template":{"spec":{"serviceAccount":"nfs-client-provisioner"}}}}'
+# deployment "nfs-client-provisioner" patched
+# root@controller-01:~/external-storage/nfs-client# 
+#
+# root@controller-01:~/external-storage/nfs-client# kubectl create -f deploy/class.yaml 
+# storageclass "managed-nfs-storage" created
+# root@controller-01:~/external-storage/nfs-client# kubectl patch storageclass managed-nfs-storage -p '{"metadata": {"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+# storageclass "managed-nfs-storage" patched
+# root@controller-01:~/external-storage/nfs-client# kubectl get storageclass 
+# NAME                            TYPE
+# managed-nfs-storage (default)   fuseim.pri/ifs   
+
+# Do this after the NFS dynamic provisioner is complete
+# - name:  Install Fission 0.4.0
+#  command: helm install --namespace fission --set serviceType=NodePort --set persistence.existingClaim=fission-storage-pvc https://github.com/fission/fission/releases/download/0.4.0/fission-all-0.4.0.tgz
+#  environment:
+#    KUBECONFIG: /home/juniper/.kube/config
+#  tags: fission-install
+
+#root@controller-01:~/external-storage/nfs-client# helm repo add fission-charts https://fission.github.io/fission-charts/
+#"fission-charts" has been added to your repositories
+#.root@controller-01:~/external-storage/nfs-client# helm repo update
+#Hang tight while we grab the latest from your chart repositories...
+#...Skip local chart repository
+#...Successfully got an update from the "fission-charts" chart repository
+#...Successfully got an update from the "stable" chart repository
+#Update Complete. ⎈ Happy Helming!⎈ 
+# helm install --namespace fission --set serviceType=NodePort -n fission-all fission-charts/fission-all --version 0.4.0
+# helm install fission-charts/fission-workflows

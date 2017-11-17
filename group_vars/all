@@ -10,7 +10,9 @@ ansible_become_pass: Clouds123
 domain: nora.juniper.net
 cluster_id: nora
 
+# you should really leave these as is, change the flannel config ifyou need to change these@!
 k8_network_cidr: 10.244.0.0/16
+k8_service_cidr: 10.96.0.0/24
 
 # password for basically everything - fixme to make more unique passwords everywhere...
 contrail_password: contrail1

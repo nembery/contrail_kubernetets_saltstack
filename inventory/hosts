@@ -1,4 +1,4 @@
-controller-01 ansible_host=192.168.122.80 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
+controller-01 ansible_host=192.168.122.81 ansible_connection=ssh ansible_user=juniper ansible_become_pass=Clouds123
 
 [all]
 controller-01

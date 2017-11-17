@@ -17,6 +17,6 @@
 - hosts: infra-master
   become: True
   roles:
-    - role: kubernetes
+    - role: k8
       become: True
 
